@@ -8,7 +8,10 @@ venv\Scripts\activate
 pip install xsensdeviceapi-2025.0.0-cp38-none-win_amd64.whl
 pip install scipy
 ```
-
+# Run
+```bash
+python mti_receive_data_xda.py
+```
 # Orientation Correction Algorithm for Xsens IMU
 
 ## Overview

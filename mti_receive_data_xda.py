@@ -5,6 +5,7 @@ import sys
 import xsensdeviceapi as xda
 from threading import Lock
 import math
+import struct
 
 class XdaCallback(xda.XsCallback):
     def __init__(self, max_buffer_size = 5):
@@ -83,7 +84,13 @@ class OrientationCorrector:
         
         self.initialized = True
         print("Orientation correction initialized with:")
-        print(f"q_rotSensor: {self.q_rotSensor}")
+        print(f"q_rotSensor: [{self.q_rotSensor[0]:.7f}, {self.q_rotSensor[1]:.7f}, {self.q_rotSensor[2]:.7f}, {self.q_rotSensor[3]:.7f}]")
+        
+        # Create and print the HEX command for RotSensor (command_type=0)
+        hex_command, command_bytes = self.create_quaternion_command(self.q_rotSensor, 0)
+        print("RotSensor HEX Command:")
+        print(hex_command)
+
     
     def quaternion_multiply(self, q1, q2):
         """
@@ -142,6 +149,69 @@ class OrientationCorrector:
         yaw_deg = math.degrees(yaw)
         
         return roll_deg, pitch_deg, yaw_deg
+    
+    def float_to_bytes(self, value):
+        """
+        Convert a float value to a 4-byte array in big-endian format.
+        
+        Parameters:
+        - value: Float value to convert
+        
+        Returns:
+        - bytes: 4-byte array representing the float
+        """
+        return struct.pack('>f', value)
+
+
+    def compute_checksum(self, packet):
+        """
+        Compute the checksum for a packet.
+        
+        Parameters:
+        - packet: Byte array representing the packet without the checksum
+        
+        Returns:
+        - checksum: The calculated checksum byte
+        """
+        total = 0
+        for byte in packet[1:]:  # Start from the second byte till the second last byte
+            total += byte
+        return (-total) & 0xFF
+
+    def create_quaternion_command(self, quaternion, command_type):
+        """
+        Create a HEX command for quaternion data.
+        
+        Parameters:
+        - quaternion: Array of quaternion values [w, x, y, z]
+        - command_type: 0 for RotSensor, 1 for RotLocal
+        
+        Returns:
+        - command_str: String representation of the command in HEX
+        - command_bytes: Byte array of the command
+        """
+        # Header bytes
+        header = bytes([0xFA, 0xFF, 0xEC, 0x11, command_type])
+        
+        # Convert quaternion values to bytes
+        qw_bytes = self.float_to_bytes(quaternion[0])
+        qx_bytes = self.float_to_bytes(quaternion[1])
+        qy_bytes = self.float_to_bytes(quaternion[2])
+        qz_bytes = self.float_to_bytes(quaternion[3])
+        
+        # Combine all bytes (excluding checksum)
+        packet = bytearray(header + qw_bytes + qx_bytes + qy_bytes + qz_bytes)
+        
+        # Calculate checksum
+        checksum = self.compute_checksum(packet)
+        
+        # Add checksum to packet
+        packet.append(checksum)
+        
+        # Convert to HEX string for display
+        command_str = ' '.join([f"{b:02X}" for b in packet])
+        
+        return command_str, packet
 
 
 if __name__ == '__main__':
@@ -194,24 +264,11 @@ if __name__ == '__main__':
         if not device.gotoConfig():
             raise RuntimeError("Could not put device into configuration mode. Aborting.")
         
-        # Put the device into configuration mode before configuring the device
-        print("Creating a log file...")
-        logFileName = "logfile.mtb"
-        if device.createLogFile(logFileName) != xda.XRV_OK:
-            raise RuntimeError("Failed to create a log file. Aborting.")
-        else:
-            print("Created a log file: %s" % logFileName)
-
         print("Putting device into measurement mode...")
         if not device.gotoMeasurement():
             raise RuntimeError("Could not put device into measurement mode. Aborting.")
 
-        print("Starting recording...")
-        if not device.startRecording():
-            raise RuntimeError("Failed to start recording. Aborting.")
-
-        print("Main loop. Recording data for 10 seconds.")
-        print("Calibrating orientation from first frame. Please hold the device in the desired reference orientation.")
+        print("Main loop. Recording data for 60 seconds.")
 
         startTime = xda.XsTimeStamp_nowMs()
         while xda.XsTimeStamp_nowMs() - startTime <= 60000:

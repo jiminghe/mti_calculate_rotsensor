@@ -297,13 +297,9 @@ if __name__ == '__main__':
 
                 print("%s\r" % s, end="", flush=True)
 
-        print("\nStopping recording...")
-        if not device.stopRecording():
-            raise RuntimeError("Failed to stop recording. Aborting.")
-
-        print("Closing log file...")
-        if not device.closeLogFile():
-            raise RuntimeError("Failed to close log file. Aborting.")
+        print("\nReturning device to configuration mode...")
+        if not device.gotoConfig():
+            raise RuntimeError("Could not return device to configuration mode. Aborting.")
 
         print("Removing callback handler...")
         device.removeCallbackHandler(callback)
